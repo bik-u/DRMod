@@ -1,0 +1,3 @@
+displayName = Discord Relay
+author = 灼眼Shana
+version = 0.1
