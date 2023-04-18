@@ -1,14 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Text.Json;
 using System.Text;
-using System.Diagnostics.Tracing;
-using System.Drawing.Printing;
-using IL.Terraria.WorldBuilding;
-using System.Security.Policy;
+using Terraria.Chat;
+using System.Collections.Generic;
+using Microsoft.Xna.Framework;
+using Terraria.Localization;
 
 namespace DiscRelay
 {
@@ -54,10 +53,12 @@ namespace DiscRelay
         private bool restarting = false;
         private UInt64 sequence;
         private string token;
+        private string mainChannel;
 
-        public Bot(string token)
+        public Bot(string token, string mainChannel)
         {
             this.token = token;
+            this.mainChannel = mainChannel;
             mainSocketCancel = new CancellationTokenSource();
         }
 
@@ -65,7 +66,7 @@ namespace DiscRelay
         {
             restarting = false;
             this.socket = new ClientWebSocket();
-            Uri uri = new Uri("wss://gateway.discord.gg/?v=10&encoding=json");
+            Uri uri = new Uri("wss://gateway.discord.gg/?v=8&encoding=json");
             await this.socket.ConnectAsync(uri, mainSocketCancel.Token);
             byte[] buffer = new byte[262144];
             while (true)
@@ -75,7 +76,6 @@ namespace DiscRelay
                 try
                 {
                     WebSocketReceiveResult result = await this.socket.ReceiveAsync(data, recieveSource.Token);
-                    Console.WriteLine(Encoding.UTF8.GetString(new ArraySegment<byte>(buffer, 0, result.Count)));
                     if (result.Count == 0)
                     {
                         // TODO: Add btr disconnection handling.
@@ -106,22 +106,43 @@ namespace DiscRelay
 
         public async Task socketSend(string data)
         {
-            Console.WriteLine(data);
             byte[] rawData = Encoding.UTF8.GetBytes(data);
             CancellationTokenSource sendSource = new CancellationTokenSource();
-            await socket.SendAsync(new ArraySegment<byte>(rawData), WebSocketMessageType.Binary, true, sendSource.Token);
+            try
+            {
+                await socket.SendAsync(new ArraySegment<byte>(rawData), WebSocketMessageType.Binary, true, sendSource.Token);
+            }
+            catch (InvalidOperationException ex)
+            {
+
+            }
         }
 
 
         private async Task onMessage(JsonElement data)
         {
+
             switch(data.GetProperty("op").GetUInt16())
             {
                 case 0:
                     switch(data.GetProperty("t").GetString())
                     {
                         case "MESSAGE_CREATE":
-                            
+                            if (data.GetProperty("d").GetProperty("channel_id").GetString() == mainChannel)
+                            {
+                                // Don't send if it's a webhook
+                                JsonElement webhook;
+                                if (data.GetProperty("d").TryGetProperty("webhook_id", out webhook))
+                                {
+                                    break;
+                                }
+
+                                JsonElement author = data.GetProperty("d").GetProperty("author").GetProperty("username");
+                                JsonElement content = data.GetProperty("d").GetProperty("content");
+                                string message = $"<{author.GetString()}> {content.GetString()}";
+                                Terraria.Chat.ChatHelper.BroadcastChatMessage(NetworkText.FromLiteral(message), Color.White);
+                               
+                            }
                             break;
                         default:
                             break;
@@ -147,10 +168,9 @@ namespace DiscRelay
                     prop.device = "custom";
                     identity.token = this.token;
                     identity.properties = prop;
-                    identity.intents = 0 + 1 << 9;
+                    identity.intents = 1 << 9;
                     identityData.d = identity;
                     identityData.op = 2;
-                    Console.WriteLine(JsonSerializer.Serialize(identityData));
                     await socketSend(JsonSerializer.Serialize(identityData));
                     break;
                 case 11:
