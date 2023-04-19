@@ -140,7 +140,7 @@ namespace DiscRelay
                                 JsonElement author = data.GetProperty("d").GetProperty("author").GetProperty("username");
                                 JsonElement content = data.GetProperty("d").GetProperty("content");
                                 string message = $"<{author.GetString()}> {content.GetString()}";
-                                Terraria.Chat.ChatHelper.BroadcastChatMessage(NetworkText.FromLiteral(message), Color.White);
+                                Terraria.Chat.ChatHelper.BroadcastChatMessage(NetworkText.FromLiteral(message), Color.White, -2);
                                
                             }
                             break;
